@@ -2,21 +2,38 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>現股當沖損益計算機</title>
+    
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="當沖計算">
+    <link rel="apple-touch-icon" href="icon-180.png">
+    
+    <link rel="manifest" href="manifest.json">
+
     <style>
-        body { font-family: -apple-system, sans-serif; background: #f4f7f6; display: flex; justify-content: center; padding: 20px; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            background: #f4f7f6; 
+            display: flex; 
+            justify-content: center; 
+            padding: 20px; 
+            /* 避免 iOS 全螢幕時內容頂到狀態列 */
+            padding-top: env(safe-area-inset-top);
+        }
         .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 400px; }
-        h2 { text-align: center; color: #333; margin-bottom: 20px; }
+        h2 { text-align: center; color: #333; margin-bottom: 20px; font-size: 1.2rem; }
         .input-group { margin-bottom: 15px; }
         label { display: block; margin-bottom: 5px; font-weight: bold; color: #555; }
-        input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; font-size: 16px; }
-        .result { margin-top: 20px; padding: 15px; border-radius: 8px; background: #f9f9f9; }
-        .profit { color: #d9534f; font-weight: bold; } /* 紅色代表獲利(台股習慣) */
-        .loss { color: #5cb85c; font-weight: bold; }   /* 綠色代表虧損 */
+        input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 16px; -webkit-appearance: none; }
+        .result { margin-top: 20px; padding: 15px; border-radius: 8px; background: #f9f9f9; text-align: center; }
+        .profit { color: #d9534f; font-weight: bold; } /* 紅色獲利 */
+        .loss { color: #5cb85c; font-weight: bold; }   /* 綠色虧損 */
         table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #eee; }
+        th, td { padding: 12px 10px; text-align: left; border-bottom: 1px solid #eee; }
         .tick-table { font-size: 14px; }
+        h4 { margin: 20px 0 10px 0; color: #666; font-size: 0.9rem; }
     </style>
 </head>
 <body>
@@ -26,20 +43,19 @@
     
     <div class="input-group">
         <label>買入價格</label>
-        <input type="number" id="buyPrice" step="0.01" placeholder="例如: 100">
+        <input type="number" id="buyPrice" step="0.01" inputmode="decimal" placeholder="例如: 100">
     </div>
     
     <div class="input-group">
         <label>賣出價格</label>
-        <input type="number" id="sellPrice" step="0.01" placeholder="例如: 102">
+        <input type="number" id="sellPrice" step="0.01" inputmode="decimal" placeholder="例如: 102">
     </div>
 
     <div class="result" id="summary">
         請輸入價格進行計算...
     </div>
 
-    <div id="tickAnalysis">
-        </div>
+    <div id="tickAnalysis"></div>
 </div>
 
 <script>
@@ -61,14 +77,12 @@
         const shares = 1000;
         const discount = 0.25;
         const feeRate = 0.001425;
-        const taxRate = 0.0015; // 當沖減半
+        const taxRate = 0.0015;
 
-        // 買入成本
         let buyFee = Math.floor(buyP * shares * feeRate * discount);
         if (buyFee < 20) buyFee = 20;
         const totalCost = (buyP * shares) + buyFee;
 
-        // 賣出收入
         let sellFee = Math.floor(sellP * shares * feeRate * discount);
         if (sellFee < 20) sellFee = 20;
         const tax = Math.floor(sellP * shares * taxRate);
@@ -81,33 +95,28 @@
     function updateUI() {
         const buyP = parseFloat(buyInput.value);
         const sellP = parseFloat(sellInput.value);
+        if (isNaN(buyP) || buyP <= 0) {
+            summaryDiv.innerHTML = "請輸入價格進行計算...";
+            tickDiv.innerHTML = "";
+            return;
+        }
 
-        if (isNaN(buyP) || buyP <= 0) return;
-
-        // 1. 計算指定價格損益
         if (!isNaN(sellP)) {
             const res = calculate(buyP, sellP);
             const colorClass = res.profit >= 0 ? 'profit' : 'loss';
             summaryDiv.innerHTML = `
-                <div>預估損益: <span class="${colorClass}">${res.profit.toLocaleString()} 元</span></div>
+                <div style="font-size: 1.1rem;">預估損益: <span class="${colorClass}">${res.profit.toLocaleString()} 元</span></div>
                 <div style="font-size: 12px; color: #888; margin-top:5px;">交易成本: ${res.totalExpenses.toLocaleString()} 元</div>
             `;
         }
 
-        // 2. 計算 Tick 檔位分析
         const tick = getTickSize(buyP);
         let tableHTML = `<table><thead><tr><th>跳動</th><th>價格</th><th>損益</th></tr></thead><tbody class="tick-table">`;
-        
         for (let i = 1; i <= 5; i++) {
             const targetP = buyP + (tick * i);
             const res = calculate(buyP, targetP);
             const colorClass = res.profit >= 0 ? 'profit' : 'loss';
-            tableHTML += `
-                <tr>
-                    <td>+${i} Tick</td>
-                    <td>${targetP.toFixed(2)}</td>
-                    <td class="${colorClass}">${res.profit.toLocaleString()}</td>
-                </tr>`;
+            tableHTML += `<tr><td>+${i} Tick</td><td>${targetP.toFixed(2)}</td><td class="${colorClass}">${res.profit.toLocaleString()}</td></tr>`;
         }
         tableHTML += `</tbody></table>`;
         tickDiv.innerHTML = "<h4>距離獲利還有幾檔？</h4>" + tableHTML;
@@ -115,22 +124,13 @@
 
     buyInput.addEventListener('input', updateUI);
     sellInput.addEventListener('input', updateUI);
-</script>
 
+    // 註冊 Service Worker (PWA 必要)
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./sw.js').catch(() => {});
+        });
+    }
+</script>
 </body>
 </html>
-
-<link rel="alternate" href="manifest.json" />
-
-<script>
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./sw.js');
-  }
-</script>
-<link rel="apple-touch-icon" href="icon-180.png">
-
-<meta name="apple-mobile-web-app-capable" content="yes">
-
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-
-<meta name="apple-mobile-web-app-title" content="Tick">
