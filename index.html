@@ -1,53 +1,121 @@
-def calculate_day_trade(buy_price, sell_price, discount=0.25, shares=1000):
-    # 基本參數
-    tax_rate = 0.0015  # 當沖交易稅減半為 0.15%
-    fee_rate = 0.001425 # 標準手續費率
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>現股當沖損益計算機</title>
+    <style>
+        body { font-family: -apple-system, sans-serif; background: #f4f7f6; display: flex; justify-content: center; padding: 20px; }
+        .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 400px; }
+        h2 { text-align: center; color: #333; margin-bottom: 20px; }
+        .input-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; color: #555; }
+        input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; font-size: 16px; }
+        .result { margin-top: 20px; padding: 15px; border-radius: 8px; background: #f9f9f9; }
+        .profit { color: #d9534f; font-weight: bold; } /* 紅色代表獲利(台股習慣) */
+        .loss { color: #5cb85c; font-weight: bold; }   /* 綠色代表虧損 */
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #eee; }
+        .tick-table { font-size: 14px; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2>現股當沖試算 (2.5折)</h2>
     
-    # 1. 買進成本
-    buy_raw_fee = buy_price * shares * fee_rate
-    buy_fee = int(buy_raw_fee * discount)
-    if buy_fee < 20: buy_fee = 20  # 低消通常為 20 元
-    total_cost = (buy_price * shares) + buy_fee
+    <div class="input-group">
+        <label>買入價格</label>
+        <input type="number" id="buyPrice" step="0.01" placeholder="例如: 100">
+    </div>
     
-    # 2. 賣出收入
-    sell_raw_fee = sell_price * shares * fee_rate
-    sell_fee = int(sell_raw_fee * discount)
-    if sell_fee < 20: sell_fee = 20
-    sell_tax = int(sell_price * shares * tax_rate)
-    total_revenue = (sell_price * shares) - sell_fee - sell_tax
-    
-    # 3. 損益計算
-    profit = total_revenue - total_cost
-    return profit, buy_fee + sell_fee + sell_tax
+    <div class="input-group">
+        <label>賣出價格</label>
+        <input type="number" id="sellPrice" step="0.01" placeholder="例如: 102">
+    </div>
 
-def get_tick_size(price):
-    """計算台股升降單位 (Tick)"""
-    if price < 10: return 0.01
-    elif price < 50: return 0.05
-    elif price < 100: return 0.1
-    elif price < 500: return 0.5
-    elif price < 1000: return 1.0
-    else: return 5.0
+    <div class="result" id="summary">
+        請輸入價格進行計算...
+    </div>
 
-# --- 執行試算 ---
-buy_p = float(input("請輸入買入價格: "))
-sell_p = float(input("請輸入賣出價格: "))
+    <div id="tickAnalysis">
+        </div>
+</div>
 
-profit, total_taxes = calculate_day_trade(buy_p, sell_p)
-tick = get_tick_size(buy_p)
+<script>
+    const buyInput = document.getElementById('buyPrice');
+    const sellInput = document.getElementById('sellPrice');
+    const summaryDiv = document.getElementById('summary');
+    const tickDiv = document.getElementById('tickAnalysis');
 
-print("-" * 30)
-print(f"買入價格: {buy_p} | 賣出價格: {sell_p}")
-print(f"預估損益: {profit:,.0f} 元")
-print(f"總交易成本 (手續費+稅): {total_taxes:,.0f} 元")
+    function getTickSize(price) {
+        if (price < 10) return 0.01;
+        if (price < 50) return 0.05;
+        if (price < 100) return 0.1;
+        if (price < 500) return 0.5;
+        if (price < 1000) return 1.0;
+        return 5.0;
+    }
 
-# 標示幾個 Tick 獲利
-print("-" * 30)
-print("【跳動檔位試算】")
-for i in range(1, 6):
-    target_p = buy_p + (tick * i)
-    p, _ = calculate_day_trade(buy_p, target_p)
-    status = "盈" if p > 0 else "虧"
-    print(f"跳 {i} 檔 ({target_p:.2f}): 損益約 {p:,.0f} 元 ({status})")
+    function calculate(buyP, sellP) {
+        const shares = 1000;
+        const discount = 0.25;
+        const feeRate = 0.001425;
+        const taxRate = 0.0015; // 當沖減半
 
-    
+        // 買入成本
+        let buyFee = Math.floor(buyP * shares * feeRate * discount);
+        if (buyFee < 20) buyFee = 20;
+        const totalCost = (buyP * shares) + buyFee;
+
+        // 賣出收入
+        let sellFee = Math.floor(sellP * shares * feeRate * discount);
+        if (sellFee < 20) sellFee = 20;
+        const tax = Math.floor(sellP * shares * taxRate);
+        const totalRevenue = (sellP * shares) - sellFee - tax;
+
+        const profit = totalRevenue - totalCost;
+        return { profit, totalExpenses: buyFee + sellFee + tax };
+    }
+
+    function updateUI() {
+        const buyP = parseFloat(buyInput.value);
+        const sellP = parseFloat(sellInput.value);
+
+        if (isNaN(buyP) || buyP <= 0) return;
+
+        // 1. 計算指定價格損益
+        if (!isNaN(sellP)) {
+            const res = calculate(buyP, sellP);
+            const colorClass = res.profit >= 0 ? 'profit' : 'loss';
+            summaryDiv.innerHTML = `
+                <div>預估損益: <span class="${colorClass}">${res.profit.toLocaleString()} 元</span></div>
+                <div style="font-size: 12px; color: #888; margin-top:5px;">交易成本: ${res.totalExpenses.toLocaleString()} 元</div>
+            `;
+        }
+
+        // 2. 計算 Tick 檔位分析
+        const tick = getTickSize(buyP);
+        let tableHTML = `<table><thead><tr><th>跳動</th><th>價格</th><th>損益</th></tr></thead><tbody class="tick-table">`;
+        
+        for (let i = 1; i <= 5; i++) {
+            const targetP = buyP + (tick * i);
+            const res = calculate(buyP, targetP);
+            const colorClass = res.profit >= 0 ? 'profit' : 'loss';
+            tableHTML += `
+                <tr>
+                    <td>+${i} Tick</td>
+                    <td>${targetP.toFixed(2)}</td>
+                    <td class="${colorClass}">${res.profit.toLocaleString()}</td>
+                </tr>`;
+        }
+        tableHTML += `</tbody></table>`;
+        tickDiv.innerHTML = "<h4>距離獲利還有幾檔？</h4>" + tableHTML;
+    }
+
+    buyInput.addEventListener('input', updateUI);
+    sellInput.addEventListener('input', updateUI);
+</script>
+
+</body>
+</html>
