@@ -13,31 +13,28 @@
     <link rel="manifest" href="manifest.json">
 
     <style>
-        body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
-    background: #f4f7f6; 
-    
-    /* 關鍵：讓內容完全置中 */
-    display: flex; 
-    justify-content: center; 
-    align-items: center; /* 垂直置中 */
-    min-height: 100vh;   /* 讓身體高度至少等於螢幕高度 */
-    margin: 0;           /* 移除預設邊距 */
-    
-    padding: 20px; 
-    box-sizing: border-box;
-}
-
-.card { 
-    background: white; 
-    padding: 25px; 
-    border-radius: 12px; 
-    box-shadow: 0 4px 15px rgba(0,0,0,0.1); 
-    width: 100%; 
-    max-width: 400px; 
-    /* 避免在 App 模式下太貼頂部 */
-    margin-top: env(safe-area-inset-top); 
-}
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            background: #f4f7f6; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; /* 垂直置中 */
+            padding: 20px; 
+            /* 避免 iOS 全螢幕時內容頂到狀態列 */
+            padding-top: env(safe-area-inset-top);
+        }
+        .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 400px; }
+        h2 { text-align: center; color: #333; margin-bottom: 20px; font-size: 1.2rem; }
+        .input-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; color: #555; }
+        input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 16px; -webkit-appearance: none; }
+        .result { margin-top: 20px; padding: 15px; border-radius: 8px; background: #f9f9f9; text-align: center; }
+        .profit { color: #d9534f; font-weight: bold; } /* 紅色獲利 */
+        .loss { color: #5cb85c; font-weight: bold; }   /* 綠色虧損 */
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { padding: 12px 10px; text-align: left; border-bottom: 1px solid #eee; }
+        .tick-table { font-size: 14px; }
+        h4 { margin: 20px 0 10px 0; color: #666; font-size: 0.9rem; }
     </style>
 </head>
 <body>
