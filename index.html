@@ -3,35 +3,36 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>現股當沖損益計算機</title>
+    <title>股票交易損益計算機</title>
     
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="apple-mobile-web-app-title" content="當沖計算">
-    <link rel="apple-touch-icon" href="icon-180.png">
-    
-    <link rel="manifest" href="manifest.json">
-
     <style>
         body { 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
             background: #f4f7f6; 
             display: flex; 
             justify-content: center; 
-            align-items: center; /* 垂直置中 */
-            min-height: 90vh;   /* 讓身體高度至少等於螢幕高度 */
+            align-items: center; 
+            min-height: 90vh;
             padding: 20px; 
-            /* 避免 iOS 全螢幕時內容頂到狀態列 */
             padding-top: env(safe-area-inset-top);
         }
         .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 400px; }
         h2 { text-align: center; color: #333; margin-bottom: 20px; font-size: 1.2rem; }
         .input-group { margin-bottom: 15px; }
         label { display: block; margin-bottom: 5px; font-weight: bold; color: #555; }
-        input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 16px; -webkit-appearance: none; }
+        input, select { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 16px; -webkit-appearance: none; background: white; }
+        
+        /* 選項切換樣式 */
+        .type-selector { display: flex; gap: 10px; margin-bottom: 15px; }
+        .type-selector label { flex: 1; text-align: center; background: #eee; padding: 10px; border-radius: 8px; cursor: pointer; transition: 0.3s; margin-bottom: 0; }
+        .type-selector input { display: none; }
+        .type-selector input:checked + span { color: white; font-weight: bold; }
+        .type-active-day { background: #d9534f !important; color: white; } /* 當沖選中顏色 */
+        .type-active-spot { background: #333 !important; color: white; } /* 現股選中顏色 */
+
         .result { margin-top: 20px; padding: 15px; border-radius: 8px; background: #f9f9f9; text-align: center; }
-        .profit { color: #d9534f; font-weight: bold; } /* 紅色獲利 */
-        .loss { color: #5cb85c; font-weight: bold; }   /* 綠色虧損 */
+        .profit { color: #d9534f; font-weight: bold; } /* 獲利紅 */
+        .loss { color: #5cb85c; font-weight: bold; }   /* 虧損綠 */
         table { width: 100%; border-collapse: collapse; margin-top: 15px; }
         th, td { padding: 12px 10px; text-align: left; border-bottom: 1px solid #eee; }
         .tick-table { font-size: 14px; }
@@ -41,8 +42,22 @@
 <body>
 
 <div class="card">
-    <h2>現股當沖試算 (2.5折)</h2>
+    <h2 id="mainTitle">股票交易試算 (2.5折)</h2>
     
+    <div class="input-group">
+        <label>交易類型</label>
+        <div class="type-selector">
+            <label id="labelDay">
+                <input type="radio" name="tradeType" value="day" checked onchange="updateUI()">
+                <span>當沖 (稅 0.15%)</span>
+            </label>
+            <label id="labelSpot">
+                <input type="radio" name="tradeType" value="spot" onchange="updateUI()">
+                <span>現股 (稅 0.3%)</span>
+            </label>
+        </div>
+    </div>
+
     <div class="input-group">
         <label>買入價格</label>
         <input type="number" id="buyPrice" step="0.01" inputmode="decimal" placeholder="例如: 100">
@@ -65,6 +80,7 @@
     const sellInput = document.getElementById('sellPrice');
     const summaryDiv = document.getElementById('summary');
     const tickDiv = document.getElementById('tickAnalysis');
+    const mainTitle = document.getElementById('mainTitle');
 
     function getTickSize(price) {
         if (price < 10) return 0.01;
@@ -75,11 +91,12 @@
         return 5.0;
     }
 
-    function calculate(buyP, sellP) {
+    function calculate(buyP, sellP, isDayTrade) {
         const shares = 1000;
         const discount = 0.25;
         const feeRate = 0.001425;
-        const taxRate = 0.0015;
+        // 核心邏輯：根據類型選擇稅率
+        const taxRate = isDayTrade ? 0.0015 : 0.003;
 
         let buyFee = Math.floor(buyP * shares * feeRate * discount);
         if (buyFee < 20) buyFee = 20;
@@ -97,6 +114,14 @@
     function updateUI() {
         const buyP = parseFloat(buyInput.value);
         const sellP = parseFloat(sellInput.value);
+        // 取得目前是否為當沖
+        const isDayTrade = document.querySelector('input[name="tradeType"]:checked').value === 'day';
+        
+        // 更新 UI 樣式
+        document.getElementById('labelDay').className = isDayTrade ? 'type-active-day' : '';
+        document.getElementById('labelSpot').className = !isDayTrade ? 'type-active-spot' : '';
+        mainTitle.innerText = isDayTrade ? "現股當沖試算 (2.5折)" : "現股交易試算 (2.5折)";
+
         if (isNaN(buyP) || buyP <= 0) {
             summaryDiv.innerHTML = "請輸入價格進行計算...";
             tickDiv.innerHTML = "";
@@ -104,7 +129,7 @@
         }
 
         if (!isNaN(sellP)) {
-            const res = calculate(buyP, sellP);
+            const res = calculate(buyP, sellP, isDayTrade);
             const colorClass = res.profit >= 0 ? 'profit' : 'loss';
             summaryDiv.innerHTML = `
                 <div style="font-size: 1.1rem;">預估損益: <span class="${colorClass}">${res.profit.toLocaleString()} 元</span></div>
@@ -116,7 +141,7 @@
         let tableHTML = `<table><thead><tr><th>跳動</th><th>價格</th><th>損益</th></tr></thead><tbody class="tick-table">`;
         for (let i = 1; i <= 5; i++) {
             const targetP = buyP + (tick * i);
-            const res = calculate(buyP, targetP);
+            const res = calculate(buyP, targetP, isDayTrade);
             const colorClass = res.profit >= 0 ? 'profit' : 'loss';
             tableHTML += `<tr><td>+${i} Tick</td><td>${targetP.toFixed(2)}</td><td class="${colorClass}">${res.profit.toLocaleString()}</td></tr>`;
         }
@@ -127,7 +152,6 @@
     buyInput.addEventListener('input', updateUI);
     sellInput.addEventListener('input', updateUI);
 
-    // 註冊 Service Worker (PWA 必要)
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
             navigator.serviceWorker.register('./sw.js').catch(() => {});
