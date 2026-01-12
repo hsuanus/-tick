@@ -2,9 +2,14 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>💰交易計算機</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>股票交易損益計算機</title>
     
+    <link rel="apple-touch-icon" href="icon-180.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="股票計算器">
+
     <style>
         body { 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
@@ -12,9 +17,10 @@
             display: flex; 
             justify-content: center; 
             align-items: center; 
-            min-height: 90vh;
+            min-height: 95vh;
             padding: 20px; 
-            padding-top: env(safe-area-inset-top);
+            margin: 0;
+            touch-action: manipulation; /* 優化點擊延遲 */
         }
         .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 400px; }
         h2 { text-align: center; color: #333; margin-bottom: 20px; font-size: 1.2rem; }
@@ -22,21 +28,22 @@
         label { display: block; margin-bottom: 5px; font-weight: bold; color: #555; }
         input, select { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 16px; -webkit-appearance: none; background: white; }
         
-        /* 選項切換樣式 */
         .type-selector { display: flex; gap: 10px; margin-bottom: 15px; }
         .type-selector label { flex: 1; text-align: center; background: #eee; padding: 10px; border-radius: 8px; cursor: pointer; transition: 0.3s; margin-bottom: 0; }
         .type-selector input { display: none; }
         .type-selector input:checked + span { color: white; font-weight: bold; }
-        .type-active-day { background: #d9534f !important; color: white; } /* 當沖選中顏色 */
-        .type-active-spot { background: #333 !important; color: white; } /* 現股選中顏色 */
+        .type-active-day { background: #d9534f !important; color: white; } 
+        .type-active-spot { background: #333 !important; color: white; } 
 
-        .result { margin-top: 20px; padding: 15px; border-radius: 8px; background: #f9f9f9; text-align: center; }
-        .profit { color: #d9534f; font-weight: bold; } /* 獲利紅 */
-        .loss { color: #5cb85c; font-weight: bold; }   /* 虧損綠 */
+        .result { margin-top: 20px; padding: 15px; border-radius: 8px; background: #f9f9f9; text-align: center; border: 1px solid #eee; }
+        .profit { color: #d9534f; font-weight: bold; } /* 台灣股市：紅漲 */
+        .loss { color: #5cb85c; font-weight: bold; }   /* 台灣股市：綠跌 */
+        
         table { width: 100%; border-collapse: collapse; margin-top: 15px; }
         th, td { padding: 12px 10px; text-align: left; border-bottom: 1px solid #eee; }
         .tick-table { font-size: 14px; }
         h4 { margin: 20px 0 10px 0; color: #666; font-size: 0.9rem; }
+        .breakeven { font-size: 12px; color: #666; margin-top: 8px; font-style: italic; }
     </style>
 </head>
 <body>
@@ -49,23 +56,23 @@
         <div class="type-selector">
             <label id="labelDay">
                 <input type="radio" name="tradeType" value="day" checked onchange="updateUI()">
-                <span>當沖</span>
+                <span>當沖 (0.15%)</span>
             </label>
             <label id="labelSpot">
                 <input type="radio" name="tradeType" value="spot" onchange="updateUI()">
-                <span>現股</span>
+                <span>現股 (0.3%)</span>
             </label>
         </div>
     </div>
 
     <div class="input-group">
         <label>買入價格</label>
-        <input type="number" id="buyPrice" step="0.01" inputmode="decimal" placeholder="例如: 100">
+        <input type="number" id="buyPrice" step="0.01" inputmode="decimal" placeholder="輸入買入價" onclick="this.select()">
     </div>
     
     <div class="input-group">
         <label>賣出價格</label>
-        <input type="number" id="sellPrice" step="0.01" inputmode="decimal" placeholder="例如: 102">
+        <input type="number" id="sellPrice" step="0.01" inputmode="decimal" placeholder="輸入賣出價" onclick="this.select()">
     </div>
 
     <div class="result" id="summary">
@@ -82,6 +89,7 @@
     const tickDiv = document.getElementById('tickAnalysis');
     const mainTitle = document.getElementById('mainTitle');
 
+    // 取得當前價格對應的跳動單位
     function getTickSize(price) {
         if (price < 10) return 0.01;
         if (price < 50) return 0.05;
@@ -91,11 +99,26 @@
         return 5.0;
     }
 
+    // 計算下一檔價格（處理跨門檻邏輯）
+    function getNextTickPrice(price, direction = 1) {
+        let p = parseFloat(price);
+        if (direction > 0) {
+            return parseFloat((p + getTickSize(p)).toFixed(2));
+        } else {
+            // 往下跳時，需判斷臨界點下方那一檔的單位
+            let tick = getTickSize(p);
+            // 處理剛好在門檻上的情況（如 50.0 往下跳是 49.95）
+            if (p === 10 || p === 50 || p === 100 || p === 500 || p === 1000) {
+                tick = getTickSize(p - 0.01);
+            }
+            return parseFloat((p - tick).toFixed(2));
+        }
+    }
+
     function calculate(buyP, sellP, isDayTrade) {
         const shares = 1000;
         const discount = 0.25;
         const feeRate = 0.001425;
-        // 核心邏輯：根據類型選擇稅率
         const taxRate = isDayTrade ? 0.0015 : 0.003;
 
         let buyFee = Math.floor(buyP * shares * feeRate * discount);
@@ -114,10 +137,8 @@
     function updateUI() {
         const buyP = parseFloat(buyInput.value);
         const sellP = parseFloat(sellInput.value);
-        // 取得目前是否為當沖
         const isDayTrade = document.querySelector('input[name="tradeType"]:checked').value === 'day';
         
-        // 更新 UI 樣式
         document.getElementById('labelDay').className = isDayTrade ? 'type-active-day' : '';
         document.getElementById('labelSpot').className = !isDayTrade ? 'type-active-spot' : '';
         mainTitle.innerText = isDayTrade ? "現股當沖試算 (2.5折)" : "現股交易試算 (2.5折)";
@@ -128,6 +149,7 @@
             return;
         }
 
+        // 計算損益
         if (!isNaN(sellP)) {
             const res = calculate(buyP, sellP, isDayTrade);
             const colorClass = res.profit >= 0 ? 'profit' : 'loss';
@@ -135,15 +157,20 @@
                 <div style="font-size: 1.1rem;">預估損益: <span class="${colorClass}">${res.profit.toLocaleString()} 元</span></div>
                 <div style="font-size: 12px; color: #888; margin-top:5px;">交易成本: ${res.totalExpenses.toLocaleString()} 元</div>
             `;
+        } else {
+            summaryDiv.innerHTML = "請輸入賣出價或查看下方跳檔表";
         }
 
-        const tick = getTickSize(buyP);
+        // 生成動態跳檔表 (處理跨門檻)
         let tableHTML = `<table><thead><tr><th>跳動</th><th>價格</th><th>損益</th></tr></thead><tbody class="tick-table">`;
+        let currentP = buyP;
+        
+        // 顯示往上 5 檔
         for (let i = 1; i <= 5; i++) {
-            const targetP = buyP + (tick * i);
-            const res = calculate(buyP, targetP, isDayTrade);
+            currentP = getNextTickPrice(currentP, 1);
+            const res = calculate(buyP, currentP, isDayTrade);
             const colorClass = res.profit >= 0 ? 'profit' : 'loss';
-            tableHTML += `<tr><td>+${i} Tick</td><td>${targetP.toFixed(2)}</td><td class="${colorClass}">${res.profit.toLocaleString()}</td></tr>`;
+            tableHTML += `<tr><td>+${i} Tick</td><td>${currentP.toFixed(2)}</td><td class="${colorClass}">${res.profit.toLocaleString()}</td></tr>`;
         }
         tableHTML += `</tbody></table>`;
         tickDiv.innerHTML = "<h4>距離獲利還有幾檔？</h4>" + tableHTML;
